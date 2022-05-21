@@ -21,7 +21,7 @@ export function submoduleCore(config: BuildConfig) {
 
 async function submoduleCoreProd(config: BuildConfig) {
   const input: InputOptions = {
-    input: join(config.tscDir, 'src', 'core', 'index.js'),
+    input: join(config.tscDir, 'packages', 'qwik', 'src', 'core', 'index.js'),
     onwarn: rollupOnWarn,
     plugins: [
       {
@@ -56,17 +56,16 @@ async function submoduleCoreProd(config: BuildConfig) {
      * and globalThis is only needed so globalThis.qDev can be set, and for dev dead code removal
      */
     injectGlobalThisPoly(),
-    `globalThis.qwikCore = (function (exports) {`,
   ].join('');
 
   const cjsOutput: OutputOptions = {
     dir: join(config.distPkgDir),
-    format: 'cjs',
+    format: 'umd',
+    name: 'qwikCore',
     entryFileNames: 'core.cjs',
     sourcemap: true,
     banner: getBanner('@builder.io/qwik'),
     intro: cjsIntro,
-    outro: `return exports; })(typeof exports === 'object' ? exports : {});`,
   };
 
   const build = await rollup(input);
@@ -149,7 +148,10 @@ async function submoduleCoreDev(config: BuildConfig) {
     outExtension: { '.js': '.cjs' },
     watch: watcher(config),
     banner: {
-      js: injectGlobalThisPoly(),
+      js: `${injectGlobalThisPoly()}\nglobalThis.qwikCore = (function (module) {`,
+    },
+    footer: {
+      js: `return module.exports; })(typeof module === 'object' && module.exports ? module : { exports: {} });`,
     },
   });
 

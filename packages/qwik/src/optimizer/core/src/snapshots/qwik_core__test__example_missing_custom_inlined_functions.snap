@@ -1,0 +1,47 @@
+---
+source: src/optimizer/core/src/test.rs
+expression: output
+---
+==INPUT==
+
+
+import { component$ as Component, $ as onRender, useStore, wrap, useEffect } from '@builder.io/qwik';
+
+
+export const useMemo$ = (qrt) => {
+    useEffect(qrt);
+};
+
+export const App = component$((props) => {
+    const state = useStore({count: 0});
+    useMemo$(() => {
+        console.log(state.count);
+    });
+    return $(() => (
+        <div>{state.count}</div>
+    ));
+});
+
+============================= test.js ==
+
+import { jsx as _jsx } from "@builder.io/qwik/jsx-runtime";
+import { useStore, useEffect } from '@builder.io/qwik';
+export const useMemo$ = (qrt)=>{
+    useEffect(qrt);
+};
+export const App = component$((props)=>{
+    const state = useStore({
+        count: 0
+    });
+    useMemo$(()=>{
+        console.log(state.count);
+    });
+    return $(()=>/*#__PURE__*/ _jsx("div", {
+            children: state.count
+        })
+    );
+});
+
+== DIAGNOSTICS ==
+
+[Diagnostic { origin: Atom('test.tsx' type=dynamic), message: "Version without $ is not exported.", code_highlights: Some([CodeHighlight { message: None, loc: SourceLocation { start_line: 11, start_col: 5, end_line: 11, end_col: 12 } }]), hints: None, show_environment: false, severity: Error, documentation_url: None }]

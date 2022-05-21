@@ -10,17 +10,15 @@ import { readFileSync, writeFileSync } from 'fs';
 export function apiExtractor(config: BuildConfig) {
   // Run the api extractor for each of the submodules
   createTypesApi(config, 'core', 'core.d.ts', './core');
+  createTypesApi(config, 'jsx-runtime', 'jsx-runtime.d.ts', './core');
   createTypesApi(config, 'optimizer', 'optimizer.d.ts', './core');
   createTypesApi(config, 'server', 'server.d.ts', './core');
   createTypesApi(config, 'testing', 'testing/index.d.ts', '../core');
   createTypesApi(config, 'build', 'build/index.d.ts', '../core');
 
-  // the jsx-runtime.d.ts file was already generated with tsc, use this one
-  const jsxRuntimeSrcPath = join(config.tscDir, 'src', 'jsx-runtime.d.ts');
-  const jsxRuntimeDestPath = join(config.distPkgDir, 'jsx-runtime.d.ts');
-  fixDtsContent(jsxRuntimeSrcPath, jsxRuntimeDestPath, './core');
+  generateServerReferenceModules(config);
 
-  console.log('🥶', 'submodule APIs generated');
+  console.log('🥶', 'submodule d.ts API files generated');
 }
 
 function createTypesApi(
@@ -29,38 +27,58 @@ function createTypesApi(
   outFileName: string,
   corePath: string
 ) {
-  const extractorConfig = ExtractorConfig.loadFileAndPrepare(
-    join(config.srcDir, submodule, 'api-extractor.json')
-  );
+  const extractorConfigPath = join(config.srcDir, submodule, 'api-extractor.json');
+  const extractorConfig = ExtractorConfig.loadFileAndPrepare(extractorConfigPath);
   const result = Extractor.invoke(extractorConfig, {
     localBuild: !!config.dev,
-    showVerboseMessages: false,
+    showVerboseMessages: true,
+    showDiagnostics: true,
     messageCallback(msg) {
       msg.handled = true;
-      if (msg.logLevel === 'verbose') {
+      if (msg.logLevel === 'verbose' || msg.logLevel === 'warning') {
         return;
       }
       if (msg.text.includes('Analysis will use')) {
         return;
       }
-      console.log('🥶', msg.text);
+      console.error(`❌ API Extractor, submodule: "${submodule}"\n${extractorConfigPath}\n`, msg);
     },
   });
   if (!result.succeeded) {
     panic(
-      `Use "npm run api.update" to automatically update the .md files if the api changes were expected`
+      `Use "yarn api.update" to automatically update the .md files if the api changes were expected`
     );
   }
   const srcPath = result.extractorConfig.untrimmedFilePath;
   const destPath = join(config.distPkgDir, outFileName);
-  fixDtsContent(srcPath, destPath, corePath);
+  fixDtsContent(config, srcPath, destPath, corePath);
+}
+
+function generateServerReferenceModules(config: BuildConfig) {
+  // server-modules.d.ts
+  const referenceDts = `/// <reference types="./server" />
+declare module '@qwik-client-manifest' {
+  const manifest: QwikManifest;
+  export { manifest };
+}
+`;
+
+  const destServerModulesPath = join(config.distPkgDir, 'server-modules.d.ts');
+  writeFileSync(destServerModulesPath, referenceDts);
+
+  // manually prepend the ts reference since api extractor removes it
+  const prependReferenceDts = `/// <reference path="./server-modules.d.ts" />\n\n`;
+  const distServerPath = join(config.distPkgDir, 'server.d.ts');
+  let serverDts = readFileSync(distServerPath, 'utf-8');
+  serverDts = prependReferenceDts + serverDts;
+  writeFileSync(distServerPath, serverDts);
 }
 
 /**
  * Fix up the generated dts content, and ensure it's using a relative
  * path to find the core.d.ts file, rather than node resolving it.
  */
-function fixDtsContent(srcPath: string, destPath: string, corePath: string) {
+function fixDtsContent(config: BuildConfig, srcPath: string, destPath: string, corePath: string) {
   let dts = readFileSync(srcPath, 'utf-8');
 
   // ensure we're just using a relative path
@@ -68,6 +86,9 @@ function fixDtsContent(srcPath: string, destPath: string, corePath: string) {
 
   // for some reason api-extractor is adding this in  ¯\_(ツ)_/¯
   dts = dts.replace('{};', '');
+
+  // replace QWIK_VERSION with the actual version number, useful for debugging
+  dts = dts.replace(/QWIK_VERSION/g, config.distVersion);
 
   writeFileSync(destPath, dts);
 }

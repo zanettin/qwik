@@ -1,0 +1,57 @@
+header {
+  @apply text-slate-200;
+  background: #0099ff;
+  box-shadow: 0px 2px 7px #0000003d;
+}
+
+header li {
+  @apply font-semibold px-2 mx-2 text-right;
+  @apply py-4 md:py-0;
+}
+
+header li:hover {
+  text-decoration: underline;
+}
+
+header ul {
+  @apply hidden md:block;
+  @apply pt-14 pb-6 md:pt-0;
+}
+
+header .more-icon {
+  @apply block;
+}
+
+header .close-icon {
+  @apply hidden;
+}
+
+@media (max-width: 767px) {
+  .header-open header ul {
+    @apply block;
+  }
+
+  .header-open header .more-icon {
+    @apply hidden;
+  }
+
+  .header-open header .close-icon {
+    @apply block;
+  }
+}
+
+header .header-inner {
+  @apply max-w-[1400px] mx-auto;
+}
+
+.full-width header .header-inner {
+  @apply max-w-[100%];
+}
+
+header .header-logo {
+  @apply fixed top-[13px] left-[max(0px,calc(50%-45rem))] pl-4;
+}
+
+.full-width header .header-logo {
+  @apply left-[0px];
+}

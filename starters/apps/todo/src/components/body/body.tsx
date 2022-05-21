@@ -1,16 +1,14 @@
-import { component$, Host } from '@builder.io/qwik';
-import { FILTERS, Todos } from '../../state/state';
+import { component$, Host, useContext } from '@builder.io/qwik';
+import { FILTERS, TODOS } from '../../state/state';
 import { Item } from '../item/item';
 
-interface BodyProps {
-  todos: Todos;
-}
-export const Body = component$(({ todos }: BodyProps) => {
+export const Body = component$(() => {
+  const todos = useContext(TODOS);
   return (
     <Host class="main">
       <ul class="todo-list">
         {todos.items.filter(FILTERS[todos.filter]).map((key) => (
-          <Item item={key} todos={todos} />
+          <Item item={key} />
         ))}
       </ul>
     </Host>

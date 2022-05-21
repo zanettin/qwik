@@ -1,0 +1,126 @@
+---
+source: packages/qwik/src/optimizer/core/src/test.rs
+expression: output
+---
+==INPUT==
+
+
+import { $, component$, useStyles$ } from '@builder.io/qwik';
+import css1 from './global.css';
+import css2 from './style.css';
+
+export const App = component$(() => {
+    const style = `${css1}${css2}`;
+    useStyles$(style);
+    const render = () => {
+        return (
+            <div></div>
+        )
+    };
+    return $(render);
+})
+
+============================= test.js ==
+
+import * as qwik from "@builder.io/qwik";
+import { componentQrl } from "@builder.io/qwik";
+export const App = /*#__PURE__*/ componentQrl(qwik.qrl(()=>import("./app_component_ckepmxzlub0")
+, "App_component_ckEPmXZlub0"));
+
+============================= app_component_usestyles_t35nsa5uv7u.js (ENTRY POINT)==
+
+import * as qwik from "@builder.io/qwik";
+export const App_component_useStyles_t35nSa5UV7U = style;
+import { handleWatch as hW } from "@builder.io/qwik";
+hW.issue456 && hW.issue123();
+export { hW as handleWatch };
+
+/*
+{
+  "origin": "test.tsx",
+  "name": "App_component_useStyles_t35nSa5UV7U",
+  "entry": null,
+  "displayName": "App_component_useStyles",
+  "hash": "t35nSa5UV7U",
+  "canonicalFilename": "app_component_usestyles_t35nsa5uv7u",
+  "extension": "js",
+  "parent": "App_component_ckEPmXZlub0",
+  "ctxKind": "function",
+  "ctxName": "useStyles$",
+  "captures": false,
+  "loc": [
+    219,
+    224
+  ]
+}
+*/
+============================= app_component_ckepmxzlub0.js (ENTRY POINT)==
+
+import * as qwik from "@builder.io/qwik";
+import { jsx as _jsx } from "@builder.io/qwik/jsx-runtime";
+import css1 from "./global.css";
+import css2 from "./style.css";
+import { useStylesQrl } from "@builder.io/qwik";
+export const App_component_ckEPmXZlub0 = ()=>{
+    const style = `${css1}${css2}`;
+    useStylesQrl(qwik.qrl(()=>import("./app_component_usestyles_t35nsa5uv7u")
+    , "App_component_useStyles_t35nSa5UV7U"));
+    const render = ()=>{
+        return /*#__PURE__*/ _jsx("div", {});
+    };
+    return qwik.qrl(()=>import("./app_component_1_w0t0o3qmovu")
+    , "App_component_1_w0t0o3QMovU");
+};
+import { handleWatch as hW } from "@builder.io/qwik";
+hW.issue456 && hW.issue123();
+export { hW as handleWatch };
+
+/*
+{
+  "origin": "test.tsx",
+  "name": "App_component_ckEPmXZlub0",
+  "entry": null,
+  "displayName": "App_component",
+  "hash": "ckEPmXZlub0",
+  "canonicalFilename": "app_component_ckepmxzlub0",
+  "extension": "js",
+  "parent": null,
+  "ctxKind": "function",
+  "ctxName": "component$",
+  "captures": false,
+  "loc": [
+    160,
+    335
+  ]
+}
+*/
+============================= app_component_1_w0t0o3qmovu.js (ENTRY POINT)==
+
+import * as qwik from "@builder.io/qwik";
+export const App_component_1_w0t0o3QMovU = render;
+import { handleWatch as hW } from "@builder.io/qwik";
+hW.issue456 && hW.issue123();
+export { hW as handleWatch };
+
+/*
+{
+  "origin": "test.tsx",
+  "name": "App_component_1_w0t0o3QMovU",
+  "entry": null,
+  "displayName": "App_component_1",
+  "hash": "w0t0o3QMovU",
+  "canonicalFilename": "app_component_1_w0t0o3qmovu",
+  "extension": "js",
+  "parent": "App_component_ckEPmXZlub0",
+  "ctxKind": "function",
+  "ctxName": "$",
+  "captures": false,
+  "loc": [
+    325,
+    331
+  ]
+}
+*/
+== DIAGNOSTICS ==
+
+[Diagnostic { origin: Atom('test.tsx' type=dynamic), message: "Identifier can not be captured", code_highlights: Some([CodeHighlight { message: None, loc: SourceLocation { start_line: 8, start_col: 16, end_line: 8, end_col: 20 } }]), hints: None, show_environment: false, severity: Error, documentation_url: None }, Diagnostic { origin: Atom('test.tsx' type=dynamic), message: "Identifier can not be captured", code_highlights: Some([CodeHighlight { message: None, loc: SourceLocation { start_line: 14, start_col: 14, end_line: 14, end_col: 19 } }]), hints: None, show_environment: false, severity: Error, documentation_url: None }]

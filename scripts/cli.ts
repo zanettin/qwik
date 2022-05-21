@@ -1,14 +1,16 @@
 import { BuildConfig, copyFile, emptyDir, importPath, mkdir, stat } from './util';
 import { build } from 'esbuild';
 import { basename, join } from 'path';
-import { getBanner, readdir, watcher } from './util';
+import { getBanner, readdir, watcher, run } from './util';
 import { readPackageJson, writePackageJson } from './package-json';
-import semver from 'semver';
+
+const PACKAGE = 'create-qwik';
 
 export async function buildCli(config: BuildConfig) {
-  const distCliDir = join(config.distDir, 'create-qwik');
+  const srcCliDir = join(config.packagesDir, PACKAGE);
+  const distCliDir = join(srcCliDir, 'dist');
 
-  await bundleCli(config, distCliDir);
+  await bundleCli(config, srcCliDir, distCliDir);
 
   const distStartersDir = join(distCliDir, 'starters');
   await mkdir(distStartersDir);
@@ -22,19 +24,18 @@ export async function buildCli(config: BuildConfig) {
     })
   );
 
-  const srcCliDir = join(config.srcDir, 'cli');
   await copyFile(join(srcCliDir, 'package.json'), join(distCliDir, 'package.json'));
   await copyFile(join(srcCliDir, 'README.md'), join(distCliDir, 'README.md'));
 
   console.log('🐠 create-qwik cli');
 }
 
-async function bundleCli(config: BuildConfig, distCliDir: string) {
+async function bundleCli(config: BuildConfig, srcCliDir: string, distCliDir: string) {
   emptyDir(distCliDir);
 
   await build({
-    entryPoints: [join(config.srcDir, 'cli', 'interface', 'index.ts')],
-    outfile: join(distCliDir, 'create-qwik'),
+    entryPoints: [join(srcCliDir, 'interface', 'index.ts')],
+    outfile: join(distCliDir, PACKAGE),
     bundle: true,
     sourcemap: false,
     target: 'node10',
@@ -42,13 +43,13 @@ async function bundleCli(config: BuildConfig, distCliDir: string) {
     minify: !config.dev,
     plugins: [importPath(/api$/, './index.js')],
     banner: {
-      js: `#! /usr/bin/env node\n${getBanner('create-qwik')}`,
+      js: `#! /usr/bin/env node\n${getBanner(PACKAGE)}`,
     },
     watch: watcher(config),
   });
 
   await build({
-    entryPoints: [join(config.srcDir, 'cli', 'api', 'index.ts')],
+    entryPoints: [join(srcCliDir, 'api', 'index.ts')],
     outfile: join(distCliDir, 'index.js'),
     bundle: true,
     sourcemap: false,
@@ -56,10 +57,57 @@ async function bundleCli(config: BuildConfig, distCliDir: string) {
     platform: 'node',
     minify: !config.dev,
     banner: {
-      js: getBanner('create-qwik'),
+      js: getBanner(PACKAGE),
     },
     watch: watcher(config),
   });
+}
+
+export async function publishStarterCli(
+  config: BuildConfig,
+  distTag: string,
+  version: string,
+  isDryRun: boolean
+) {
+  const distCliDir = join(config.packagesDir, PACKAGE, 'dist');
+  const cliPkg = await readPackageJson(distCliDir);
+
+  // update the cli version
+  console.log(`   update version = "${version}"`);
+  cliPkg.version = version;
+  await writePackageJson(distCliDir, cliPkg);
+
+  // update the base app's package.json
+  const distCliBaseAppDir = join(distCliDir, 'starters', 'apps', 'base');
+  const baseAppPkg = await readPackageJson(distCliBaseAppDir);
+  baseAppPkg.devDependencies = baseAppPkg.devDependencies || {};
+
+  console.log(`   update devDependencies["@builder.io/qwik"] = "${version}"`);
+  baseAppPkg.devDependencies['@builder.io/qwik'] = version;
+
+  const rootPkg = await readPackageJson(config.rootDir);
+  const typescriptDepVersion = rootPkg.devDependencies!.typescript;
+  const viteDepVersion = rootPkg.devDependencies!.vite;
+
+  console.log(`   update devDependencies["typescript"] = "${typescriptDepVersion}"`);
+  baseAppPkg.devDependencies['typescript'] = typescriptDepVersion;
+
+  console.log(`   update devDependencies["vite"] = "${viteDepVersion}"`);
+  baseAppPkg.devDependencies['vite'] = viteDepVersion;
+
+  console.log(distCliBaseAppDir, JSON.stringify(baseAppPkg, null, 2));
+  await writePackageJson(distCliBaseAppDir, baseAppPkg);
+
+  console.log(`⛴ publishing ${cliPkg.name} ${version}`, isDryRun ? '(dry-run)' : '');
+
+  const npmPublishArgs = ['publish', '--tag', distTag];
+
+  await run('npm', npmPublishArgs, isDryRun, isDryRun, { cwd: distCliDir });
+
+  console.log(
+    `🐳 published version "${version}" of ${cliPkg.name} with dist-tag "${distTag}" to npm`,
+    isDryRun ? '(dry-run)' : ''
+  );
 }
 
 async function copyDir(config: BuildConfig, srcDir: string, destDir: string) {
@@ -67,7 +115,7 @@ async function copyDir(config: BuildConfig, srcDir: string, destDir: string) {
   const items = await readdir(srcDir);
   await Promise.all(
     items.map(async (itemName) => {
-      if (!IGNORE[itemName]) {
+      if (!IGNORE[itemName] || itemName.includes('.test')) {
         const srcPath = join(srcDir, itemName);
         const destPath = join(destDir, itemName);
         const itemStat = await stat(srcPath);
@@ -85,33 +133,31 @@ async function copyDir(config: BuildConfig, srcDir: string, destDir: string) {
 }
 
 async function updatePackageJson(config: BuildConfig, destDir: string) {
+  const rootPkg = await readPackageJson(config.rootDir);
   const pkgJson = await readPackageJson(destDir);
-  if (pkgJson.devDependencies) {
-    const rootPkg = await readPackageJson(config.rootDir);
 
-    const setVersionFromRoot = (pkgName: string) => {
-      if (pkgJson.devDependencies && pkgJson.devDependencies[pkgName]) {
-        if (
-          rootPkg.devDependencies &&
-          rootPkg.devDependencies[pkgName] &&
-          !semver.prerelease(rootPkg.devDependencies[pkgName])
-        ) {
-          pkgJson.devDependencies[pkgName] = rootPkg.devDependencies[pkgName];
-        }
+  const setVersionFromRoot = (pkgName: string) => {
+    if (pkgJson.devDependencies && pkgJson.devDependencies[pkgName]) {
+      if (rootPkg.devDependencies && rootPkg.devDependencies[pkgName]) {
+        pkgJson.devDependencies[pkgName] = rootPkg.devDependencies[pkgName];
       }
-    };
-
-    if (pkgJson.devDependencies['@builder.io/qwik'] && !semver.prerelease(rootPkg.version)) {
-      pkgJson.devDependencies['@builder.io/qwik'] = rootPkg.version;
     }
+  };
 
-    setVersionFromRoot('@types/node');
-    setVersionFromRoot('prettier');
-    setVersionFromRoot('typescript');
-    setVersionFromRoot('vite');
-
-    await writePackageJson(destDir, pkgJson);
+  if (pkgJson.devDependencies && pkgJson.devDependencies['@builder.io/qwik']) {
+    pkgJson.devDependencies['@builder.io/qwik'] = rootPkg.version;
   }
+
+  setVersionFromRoot('@types/eslint');
+  setVersionFromRoot('@types/node');
+  setVersionFromRoot('@typescript-eslint/eslint-plugin');
+  setVersionFromRoot('@typescript-eslint/parser');
+  setVersionFromRoot('eslint');
+  setVersionFromRoot('prettier');
+  setVersionFromRoot('typescript');
+  setVersionFromRoot('vite');
+
+  await writePackageJson(destDir, pkgJson);
 }
 
 const IGNORE: { [path: string]: boolean } = {
@@ -125,10 +171,3 @@ const IGNORE: { [path: string]: boolean } = {
   'tsconfig.tsbuildinfo': true,
   'yarn.lock': true,
 };
-
-export async function validateCreateQwikCli(config: BuildConfig, errors: string[]) {
-  try {
-  } catch (e: any) {
-    errors.push(String(e.message || e));
-  }
-}

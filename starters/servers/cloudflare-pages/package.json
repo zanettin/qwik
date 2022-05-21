@@ -1,10 +1,11 @@
 {
   "description": "Cloudflare Pages.",
   "scripts": {
+    "build.ssr": "vite build --ssr src/entry.cloudflare.tsx",
     "serve": "wrangler pages dev ./dist"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "3.6.0",
+    "@cloudflare/workers-types": "3.9.0",
     "wrangler": "beta"
   },
   "qwik": {
