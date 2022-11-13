@@ -12,7 +12,7 @@ import './global.css'
 ```
 
 ## Inline critical styles
-To reduce the blocking time of the first paint, Qwik can inline the critical styles for the current view. This means that the browser will not need to download the styles for the current view. To tell Qwik to inline styles, just add the `?inline` query parameter to the import.
+To reduce the blocking time of the first paint, Qwik can inline the critical styles for the current view. This means that the browser will not need to download the styles for the current view. To tell Qwik to inline styles, just add the `?inline` parameter to the import.
 
 ```tsx
 import from './my-component.css?inline'
@@ -71,11 +71,12 @@ export const CmpStyles = component$(() => {
 ## `useStylesScope$`
 In previous sections, we have discussed how styles can be loaded lazily as they are needed using the `useStyles$()` hook.
 Browser styles are global and apply to all DOM elements, for this reason, Qwik also provides a way to load styles that are specific to a specific component. 
-This is achieved by generating a unique class for each component and then inserting that unique class id into the stylesheet.
+This is achieved by generating a unique class for each component and then inserting that unique class id into the stylesheet. 
+Please note that you need to import the styles using the `?inline` query parameter.
 
 ```tsx
 import {useStylesScoped$} from '@builder.io/qwik';
-import styles from './code-block.css';
+import styles from './code-block.css?inline';
 
 export const CmpStyles = component$(() => {
   useStylesScoped$(styles);
