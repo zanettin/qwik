@@ -93,7 +93,7 @@ vite-error-overlay {
   --qwik-dark-purple: #713fc2;
   --yellow: var(--qwik-light-blue);
   --purple: var(--color-bright);
-  --red: var(--qwik-light-blue);
+  --red: red;
 
   --vertical-box-spacing: 15px;
   --box-padding: 20px;
@@ -135,6 +135,7 @@ vite-error-overlay::part(frame),
 vite-error-overlay::part(stack),
 vite-error-overlay::part(tip) {
   background: var(--box-background);
+  border-left: 5px solid transparent;
   border-radius: var(--box-border-radius);
   margin: var(--box-margin);
   min-height: 50px;
@@ -143,11 +144,12 @@ vite-error-overlay::part(tip) {
 }
 
 vite-error-overlay::part(file) {
-  color: var(--qwik-light-blue);
+  color: var(--color-bright);
 }
 
 vite-error-overlay::part(frame) {
-  color: var(--color-bright);
+  border-left-color: #fff655;
+  color: #fff655;
 }
 
 vite-error-overlay::part(tip) {
