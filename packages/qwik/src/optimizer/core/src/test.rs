@@ -519,7 +519,7 @@ export const Works = component$(({
         console.log(count, rest, hey, some);
     });
     return (
-        <div some={some} class={count} {...rest}>{count}</div>
+        <div some={some} params={{ some }} class={count} {...rest}>{count}</div>
     );
 });
 
@@ -1436,9 +1436,10 @@ export default component$(()=> {
 fn example_strip_server_code() {
     test_input!(TestInput {
         code: r#"
-import { component$, useServerMount$, serverStuff$, useStore, useTask$ } from '@builder.io/qwik';
+import { component$, useServerMount$, serverLoader$, serverStuff$, useStore, useTask$ } from '@builder.io/qwik';
 import mongo from 'mongodb';
 import redis from 'redis';
+import { handler } from 'serverless';
 
 export const Parent = component$(() => {
     const state = useStore({
@@ -1454,6 +1455,8 @@ export const Parent = component$(() => {
     serverStuff$(async () => {
         // should be removed too
     })
+
+    serverLoader$(handler);
 
     useTask$(() => {
         // Code

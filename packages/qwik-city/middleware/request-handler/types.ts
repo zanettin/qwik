@@ -1,6 +1,5 @@
 import type { Render, RenderOptions } from '@builder.io/qwik/server';
-import type { FailReturn, ServerAction, ServerLoader } from '../../runtime/src/server-functions';
-import type { QwikCityPlan } from '@builder.io/qwik-city';
+import type { QwikCityPlan, FailReturn, Action, Loader } from '@builder.io/qwik-city';
 import type { ErrorResponse } from './error-handler';
 import type { AbortMessage, RedirectMessage } from './redirect-handler';
 import type { RequestEventInternal } from './request-event';
@@ -62,6 +61,8 @@ export interface SendMethod {
   (response: Response): AbortMessage;
 }
 
+export type RedirectCode = 301 | 302 | 303 | 307 | 308;
+
 /**
  * @alpha
  */
@@ -88,7 +89,7 @@ export interface RequestEventCommon<PLATFORM = unknown> {
    *
    * https://developer.mozilla.org/en-US/docs/Web/HTTP/Redirections
    */
-  readonly redirect: (statusCode: number, url: string) => RedirectMessage;
+  readonly redirect: (statusCode: RedirectCode, url: string) => RedirectMessage;
 
   /**
    * When called, the response will immediately end with the given
@@ -159,7 +160,7 @@ export interface RequestEventCommon<PLATFORM = unknown> {
    * URL path params which have been parsed from the current url pathname segments.
    * Use `query` to instead retrieve the query string search params.
    */
-  readonly params: Record<string, string>;
+  readonly params: Readonly<Record<string, string>>;
 
   /**
    * URL Query Strings (URL Search Params).
@@ -279,25 +280,31 @@ export interface RequestEvent<PLATFORM = unknown> extends RequestEventCommon<PLA
 /**
  * @alpha
  */
-export interface RequestEventLoader<PLATFORM = unknown> extends RequestEventCommon<PLATFORM> {
-  getData: GetData;
+export interface RequestEventAction<PLATFORM = unknown> extends RequestEventCommon<PLATFORM> {
   fail: <T extends Record<string, any>>(status: number, returnData: T) => FailReturn<T>;
 }
 
 /**
  * @alpha
  */
+export interface RequestEventLoader<PLATFORM = unknown> extends RequestEventAction<PLATFORM> {
+  getData: GetData;
+}
+
+/**
+ * @alpha
+ */
 export interface GetData {
-  <T>(loader: ServerLoader<T>): Promise<T>;
-  <T>(loader: ServerAction<T>): Promise<T | undefined>;
+  <T>(loader: Loader<T>): Awaited<T> extends () => any ? never : Promise<T>;
+  <T>(loader: Action<T>): Promise<T | undefined>;
 }
 
 /**
  * @alpha
  */
 export interface GetSyncData {
-  <T>(loader: ServerLoader<T>): T;
-  <T>(loader: ServerAction<T>): T | undefined;
+  <T>(loader: Loader<T>): Awaited<T> extends () => any ? never : Awaited<T>;
+  <T>(action: Action<T>): Awaited<T> | undefined;
 }
 
 /**

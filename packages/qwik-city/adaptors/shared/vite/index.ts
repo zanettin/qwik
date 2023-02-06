@@ -4,7 +4,6 @@ import type { QwikVitePlugin } from '@builder.io/qwik/optimizer';
 import type {
   StaticGenerateOptions,
   StaticGenerateRenderOptions,
-  StaticGeneratePathFilter,
 } from '@builder.io/qwik-city/static';
 import type { BuildRoute } from '../../../buildtime/types';
 import fs from 'node:fs';
@@ -31,8 +30,13 @@ export function viteAdaptor(opts: ViteAdaptorPluginOptions) {
 
     config(config) {
       if (typeof opts.config === 'function') {
-        return opts.config(config);
+        config = opts.config(config);
       }
+      config.define = {
+        'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
+        ...config.define,
+      };
+      return config;
     },
 
     configResolved(config) {
@@ -116,11 +120,13 @@ export function viteAdaptor(opts: ViteAdaptorPluginOptions) {
           const routes = qwikCityPlugin.api.getRoutes();
           const basePathname = qwikCityPlugin.api.getBasePathname();
           const clientOutDir = qwikVitePlugin.api.getClientOutDir()!;
-
+          const rootDir = qwikVitePlugin.api.getRootDir() ?? undefined;
           if (renderModulePath && qwikCityPlanModulePath && clientOutDir) {
             if (opts.staticGenerate) {
               this.warn(`Option "staticGenerate" is deprecated. Please use "ssg" option instead.`);
-              opts.ssg = opts.ssg || {};
+              opts.ssg = opts.ssg || {
+                include: [],
+              };
               if (typeof opts.staticGenerate === 'object') {
                 opts.ssg = {
                   ...opts.staticGenerate,
@@ -129,78 +135,69 @@ export function viteAdaptor(opts: ViteAdaptorPluginOptions) {
               }
             }
 
-            let ssgOrigin = opts.origin;
-            if (!ssgOrigin) {
-              ssgOrigin = `https://yoursite.qwik.builder.io`;
-            }
-            if (
-              ssgOrigin.length > 0 &&
-              !ssgOrigin.startsWith('https://') &&
-              !ssgOrigin.startsWith('http://')
-            ) {
-              ssgOrigin = `https://${ssgOrigin}`;
-            }
-            try {
-              ssgOrigin = new URL(ssgOrigin).origin;
-            } catch (e) {
-              this.warn(
-                `Invalid "origin" option: "${ssgOrigin}". Using default origin: "https://yoursite.qwik.builder.io"`
-              );
-              ssgOrigin = `https://yoursite.qwik.builder.io`;
-            }
+            if (Array.isArray(opts.ssg?.include) && opts.ssg!.include.length > 0) {
+              let ssgOrigin = opts.origin;
+              if (!ssgOrigin) {
+                ssgOrigin = `https://yoursite.qwik.builder.io`;
+              }
+              if (
+                ssgOrigin.length > 0 &&
+                !ssgOrigin.startsWith('https://') &&
+                !ssgOrigin.startsWith('http://')
+              ) {
+                ssgOrigin = `https://${ssgOrigin}`;
+              }
+              try {
+                ssgOrigin = new URL(ssgOrigin).origin;
+              } catch (e) {
+                this.warn(
+                  `Invalid "origin" option: "${ssgOrigin}". Using default origin: "https://yoursite.qwik.builder.io"`
+                );
+                ssgOrigin = `https://yoursite.qwik.builder.io`;
+              }
 
-            let pathFilter: StaticGeneratePathFilter;
-            if (typeof opts.ssg?.filter === 'function') {
-              pathFilter = opts.ssg.filter;
-            } else if (opts.ssg?.filter === 'all') {
-              // render all paths
-              pathFilter = () => true;
-            } else {
-              // "auto" is the default
-              // determine if a path is static by checking if the render said it was static or not
-              pathFilter = ({ isStatic }) => {
-                // only keep if it's a static path
-                // returning false will skip the path from being written to disk
-                return !!isStatic;
+              const staticGenerate = await import('../../../static');
+              const generateOpts: StaticGenerateOptions = {
+                maxWorkers: opts.maxWorkers,
+                basePathname,
+                outDir: clientOutDir,
+                rootDir,
+                ...opts.ssg,
+                origin: ssgOrigin,
+                renderModulePath,
+                qwikCityPlanModulePath,
               };
-            }
 
-            const staticGenerate = await import('../../../static');
-            const generateOpts: StaticGenerateOptions = {
-              maxWorkers: opts.maxWorkers,
-              basePathname,
-              outDir: clientOutDir,
-              ...opts.ssg,
-              origin: ssgOrigin,
-              filter: pathFilter,
-              renderModulePath,
-              qwikCityPlanModulePath,
-            };
+              const staticGenerateResult = await staticGenerate.generate(generateOpts);
+              if (staticGenerateResult.errors > 0) {
+                const err = new Error(
+                  `Error while runnning SSG from "${opts.name}" adaptor. At least one path failed to render.`
+                );
+                err.stack = undefined;
+                this.error(err);
+              }
 
-            const staticGenerateResult = await staticGenerate.generate(generateOpts);
-            if (staticGenerateResult.errors > 0) {
-              this.error(
-                `Error while runnning SSG from "${opts.name}" adaptor. At least one path failed to render.`
+              staticPaths.push(...staticGenerateResult.staticPaths);
+
+              const { staticPathsCode, notFoundPathsCode } = await postBuild(
+                clientOutDir,
+                basePathname,
+                staticPaths,
+                format,
+                !!opts.cleanStaticGenerated
               );
+
+              await Promise.all([
+                fs.promises.writeFile(
+                  join(serverOutDir, RESOLVED_STATIC_PATHS_ID),
+                  staticPathsCode
+                ),
+                fs.promises.writeFile(
+                  join(serverOutDir, RESOLVED_NOT_FOUND_PATHS_ID),
+                  notFoundPathsCode
+                ),
+              ]);
             }
-
-            staticPaths.push(...staticGenerateResult.staticPaths);
-
-            const { staticPathsCode, notFoundPathsCode } = await postBuild(
-              clientOutDir,
-              basePathname,
-              staticPaths,
-              format,
-              !!opts.cleanStaticGenerated
-            );
-
-            await Promise.all([
-              fs.promises.writeFile(join(serverOutDir, RESOLVED_STATIC_PATHS_ID), staticPathsCode),
-              fs.promises.writeFile(
-                join(serverOutDir, RESOLVED_NOT_FOUND_PATHS_ID),
-                notFoundPathsCode
-              ),
-            ]);
 
             if (typeof opts.generate === 'function') {
               await opts.generate({
@@ -287,23 +284,17 @@ export interface ServerAdaptorOptions {
 /**
  * @alpha
  */
-export interface AdaptorSSGOptions
-  extends Omit<StaticGenerateRenderOptions, 'outDir' | 'origin' | 'filter'> {
+export interface AdaptorSSGOptions extends Omit<StaticGenerateRenderOptions, 'outDir' | 'origin'> {
   /**
-   * The `filter` option can be used to determine which pages should be statically
-   * generated rather than server-side rendered (SSR). Defaults to `"auto"`.
-   *
-   * `"auto"` - Attempts to automatically decide if a page shiould be statically generated
-   * if it does not have dynamic data.
-   *
-   * `"all"` - All pages will be statically generated.
-   *
-   * `Function` - Callback function can be used to determine if a page should be statically
-   * generated or not. The filter function is passed the `pathname` and `params` data,
-   * and should return `true` if the page should be statically generated. Returning `false`
-   * will prevent the page from being statically generated.
+   * Defines routes that should be static generated. Accepts wildcard behavior.
    */
-  filter?: 'auto' | 'all' | StaticGeneratePathFilter;
+  include: string[];
+  /**
+   * Defines routes that should not be static generated. Accepts wildcard behavior. `exclude` always
+   * take priority over  `include`.
+   */
+  exclude?: string[];
+
   /**
    * The URL `origin`, which is a combination of the scheme (protocol) and hostname (domain).
    * For example, `https://qwik.builder.io` has the protocol `https://` and domain `qwik.builder.io`.
